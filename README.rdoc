@@ -68,9 +68,7 @@ Mocking allows us to catch the call out to the API, and return a mock up of what
 
 === WebMock
 
-To mock this API call with use WebMock:
-
-  https://github.com/bblimke/webmock
+To mock this API call we will use WebMock: https://github.com/bblimke/webmock
 
 So we add the gem to Gemfile:
 
