@@ -5,18 +5,18 @@ class ThingsControllerTest < ActionController::TestCase
     @thing = things(:one)
   end
 
-  test "should get index" do
+  def test_index
     get :index
     assert_response :success
     assert_not_nil assigns(:things)
   end
 
-  test "should get new" do
+  def test_new
     get :new
     assert_response :success
   end
 
-  test "should create thing" do
+  def test_create
     assert_difference('Thing.count') do
       post :create, thing: { name: @thing.name }
     end
@@ -24,22 +24,22 @@ class ThingsControllerTest < ActionController::TestCase
     assert_redirected_to thing_path(assigns(:thing))
   end
 
-  test "should show thing" do
+  def test_show
     get :show, id: @thing
     assert_response :success
   end
 
-  test "should get edit" do
+  def test_edit
     get :edit, id: @thing
     assert_response :success
   end
 
-  test "should update thing" do
+  def test_update
     patch :update, id: @thing, thing: { name: @thing.name }
     assert_redirected_to thing_path(assigns(:thing))
   end
 
-  test "should destroy thing" do
+  def test_destroy
     assert_difference('Thing.count', -1) do
       delete :destroy, id: @thing
     end

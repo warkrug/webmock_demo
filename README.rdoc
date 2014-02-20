@@ -1,28 +1,149 @@
-== README
+= WebMock demo
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+An introduction to WebMock
 
-Things you may want to cover:
+== The starting point
 
-* Ruby version
+We have a rails app with a scaffolded Thing object. We decide to add a method for it grab its name via a JSON call (for this demo, the call is to a local copy of the app itself). So we start with a basic test:
 
-* System dependencies
+    require 'test_helper'
 
-* Configuration
+    class ThingTest < ActiveSupport::TestCase
+  
+      def test_name_by_json
+        thing = things(:one)
+        assert_equal thing.name, thing.name_by_json
+      end
 
-* Database creation
+    end
 
-* Database initialization
+We run the test, and build the code that passes the test:
 
-* How to run the test suite
+    class Thing < ActiveRecord::Base
 
-* Services (job queues, cache servers, search engines, etc.)
+      def name_by_json
+        data['name']
+      end
 
-* Deployment instructions
+      def uri
+        URI "http://localhost:3000/things/1.json"
+      end
 
-* ...
+      def json_data
+        Net::HTTP.get uri
+      end
 
+      def data
+        JSON.parse json_data
+      end
+    end
 
-Please feel free to use a different markup language if you do not plan to run
-<tt>rake doc:app</tt>.
+=== For simplicity sake
+
+Ignoring (for now) that strictly the code that passed the test as shown would have been:
+
+      def name_by_json
+        name
+      end
+
+And we should also have tests that test the callout to the API. So for this code, a test of the json_data method for example.
+
+== The problems start
+
+And we are all happy until .... the test starts failing.
+
+First someone forgets to fire up the local instance of the app. So we point the uri at the public instance of the app, and that fixes the problems ..... until:
+
+Then someone deletes the first thing in the public instance. So we create a new Thing and alter the uri to point at the new one.
+
+Then someone changes the name of the public thing ...
+
+== The problem
+
+We need to alter the test so that it tests the functionality of our code without having to rely on the integrity and availability of the remote API.
+
+== The solution: Mocking
+
+Mocking allows us to catch the call out to the API, and return a mock up of what should be returned by that API.
+
+=== WebMock
+
+To mock this API call with use WebMock:
+
+  https://github.com/bblimke/webmock
+
+So we add the gem to Gemfile:
+
+    gem 'webmock'
+
+And also update test/test_helper by adding:
+
+    require 'webmock/minitest'
+
+Now when we run the test we get this error:
+
+      1) Error:
+    ThingTest#test_name_by_json:
+    WebMock::NetConnectNotAllowedError: Real HTTP connections are disabled. Unregistered request: GET http://localhost:3000/things/1.json with headers {'Accept'=>'*/*', 'User-Agent'=>'Ruby'}
+
+    You can stub this request with the following snippet:
+
+    stub_request(:get, "http://localhost:3000/things/1.json").
+      with(:headers => {'Accept'=>'*/*', 'User-Agent'=>'Ruby'}).
+      to_return(:status => 200, :body => "", :headers => {})
+
+Which tells us WebMock is now monitoring our HTTP connections but also provides us with a code example to set up our first mock. So lets use it:
+
+    def test_name_by_json
+
+      stub_request(:get, "http://localhost:3000/things/1.json").
+        with(:headers => {'Accept'=>'*/*', 'User-Agent'=>'Ruby'}).
+        to_return(:status => 200, :body => "", :headers => {})
+
+      thing = things(:one)
+      assert_equal thing.name, thing.name_by_json
+
+    end
+
+And we get an error:
+
+      1) Error:
+    ThingTest#test_name_by_json:
+    TypeError: can't convert nil into String
+        app/models/thing.rb:16:in `data'
+        app/models/thing.rb:4:in `name_by_json'
+        test/models/thing_test.rb:12:in `test_name_by_json'
+
+Why is this failing? Let's deconstruct the stub_request. There are three elements:
+
+    stub_request(:get, "http://localhost:3000/things/1.json")
+
+Tells WebMock to stub a GET request to http://localhost:3000/things/1.json
+
+    with(:headers => {'Accept'=>'*/*', 'User-Agent'=>'Ruby'})
+
+Then some additional header attributes are specified (for this example, we can remove this statement)
+
+    to_return(:status => 200, :body => "", :headers => {})
+
+Tells WebMock what to return when the connection is requested. *And there is our problem*. It is returning an empty string as the body. 
+
+So we can update the test:
+
+    def test_name_by_json
+
+      thing = things(:one)
+
+      stub_request(:get, "http://localhost:3000/things/1.json").
+        to_return(:status => 200, :body => thing.to_json, :headers => {})
+
+      assert_equal thing.name, thing.name_by_json
+    end
+
+And now our tests pass.
+
+== Conclusion
+
+Using WebMock has allowed us to remove the reliance on the integrity of the API.
+
+Also notice that by modifying the stub_request, we can test that the remote call is being sent out to the uri that we expect. It in fact makes it easier to interrogate the HTTP call, because if the API call doesn't match the stub_request, WebMock with generate an error that details the discrepancy.
